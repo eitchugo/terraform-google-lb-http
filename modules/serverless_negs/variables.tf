@@ -141,6 +141,35 @@ variable "create_url_map" {
   default     = true
 }
 
+variable "create_url_map_resource" {
+  description = "Map backends with routing rules"
+  type        = object({
+                  name = optional(string)
+                  description = optional(string)
+                  default_service = string
+
+                  host_rules = list(object({
+                    description   = optional(string)
+                    hosts         = list(string)
+                    path_matcher  = string
+                  }))
+
+                  path_matchers = list(object({
+                    name = string
+                    description  = optional(string)
+                    header_action   = optional(string)
+                    default_service = string
+                    path_rules = list(object({
+                      paths = list(string)
+                      service = optional(string)
+                    }))
+                    route_rules = optional(string)
+                    default_url_redirect = optional(string)
+                    default_route_action = optional(string)
+                  }))
+                })
+}
+
 variable "url_map" {
   description = "The url_map resource to use. Default is to send all traffic to first backend."
   type        = string

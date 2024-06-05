@@ -114,7 +114,7 @@ resource "google_compute_target_https_proxy" "default" {
   project = var.project
   count   = var.ssl ? 1 : 0
   name    = "${var.name}-https-proxy"
-  url_map = local.url_map
+  url_map = var.create_url_map_resource == null ? local.url_map : join("", google_compute_url_map.custom[*].self_link)
 
   ssl_certificates            = compact(concat(var.ssl_certificates, google_compute_ssl_certificate.default[*].self_link, google_compute_managed_ssl_certificate.default[*].self_link, ), )
   certificate_map             = var.certificate_map != null ? "//certificatemanager.googleapis.com/${var.certificate_map}" : null
@@ -162,11 +162,46 @@ resource "google_compute_managed_ssl_certificate" "default" {
 }
 
 resource "google_compute_url_map" "default" {
+  count = var.create_url_map && var.create_url_map_resource == null ? 1 : 0
+
   provider        = google-beta
   project         = var.project
-  count           = var.create_url_map ? 1 : 0
   name            = "${var.name}-url-map"
   default_service = google_compute_backend_service.default[keys(var.backends)[0]].self_link
+}
+
+resource "google_compute_url_map" "custom" {
+  count = var.create_url_map && var.create_url_map_resource != null ? 1 : 0
+
+  provider        = google-beta
+  project         = var.project
+  name            = "${var.name}-url-map-custom"
+  default_service = google_compute_backend_service.default[var.create_url_map_resource["default_service"]].self_link
+
+  dynamic "host_rule" {
+    for_each = var.create_url_map_resource.host_rules != null ? var.create_url_map_resource.host_rules : []
+    content {
+      description   = host_rule.value.description
+      hosts         = host_rule.value.hosts
+      path_matcher  = host_rule.value.path_matcher
+    }
+  }
+
+  dynamic "path_matcher" {
+    for_each = var.create_url_map_resource.path_matchers != null ? var.create_url_map_resource.path_matchers : []
+    content {
+      name = path_matcher.value.name
+      default_service = google_compute_backend_service.default[path_matcher.value.default_service].self_link
+
+      dynamic "path_rule" {
+        for_each = path_matcher.value.path_rules != null ? path_matcher.value.path_rules : []
+        content {
+          paths = path_rule.value.paths
+          service = google_compute_backend_service.default[path_rule.value.service].self_link
+        }
+      }
+    }
+  }
 }
 
 resource "google_compute_url_map" "https_redirect" {
